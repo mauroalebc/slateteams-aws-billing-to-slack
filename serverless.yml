@@ -1,0 +1,57 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+# org: slateteams
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+# app: aws-billing-to-slack
+service: aws-billing-to-slack
+
+plugins:
+  - serverless-python-requirements
+package:
+  exclude:
+    - node_modules/**
+    - venv/**
+provider:
+  name: aws
+  # Sane defaults, easy for multi-account/multi-region organizations
+  profile: ${param:aws_profile, env:AWS_PROFILE, 'default'}
+  region: ${env:AWS_REGION, env:AWS_DEFAULT_REGION, 'us-east-1'}
+  runtime: python3.11
+
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - "ce:GetCostAndUsage"
+          Resource: "*"
+          # Needed to get account alias
+        - Effect: "Allow"
+          Action:
+            - "iam:ListAccountAliases"
+          Resource: "*"
+
+functions:
+  report_cost:
+    handler: handler.lambda_handler
+
+    description: Send account daily billing data to Slack/Teams
+
+    # Keep costs minimal
+    memorySize: 128
+    timeout: 10
+
+    events:
+      # Every 15 minutes
+      - schedule: cron(0/15 * * * ? *)
+
+    environment:
+      GROUP_BY: ${param:group, 'SERVICE'}
+      LENGTH: ${param:group_length, 10}
+      N_DAYS: ${param:n_days, '7'}
+      REPORT_TYPE: ${param:report_type, 'total'}
+      SLACK_WEBHOOK_URL: ${param:slack_url, ''}
+      TEAMS_WEBHOOK_URL: ${param:teams_url, ''}
+      AWS_ACCOUNT_NAME: ${param:aws_account, ''}
+      CREDITS_EXPIRE_DATE: ${param:credits_expire_date, ''}
+      CREDITS_REMAINING_AS_OF: ${param:credits_remaining_date, ''}
+      CREDITS_REMAINING: ${param:credits_remaining, ''}
